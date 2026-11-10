@@ -16,6 +16,9 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// version задаётся при сборке: -ldflags "-X main.version=...".
+var version = "dev"
+
 // App хранит зависимости обработчиков.
 type App struct {
 	store *Store
@@ -91,7 +94,7 @@ func main() {
 	}
 
 	go func() {
-		log.Info("сервис запущен", "addr", srv.Addr)
+		log.Info("сервис запущен", "addr", srv.Addr, "version", version)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("ошибка HTTP-сервера", "error", err.Error())
 			os.Exit(1)

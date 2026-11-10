@@ -21,6 +21,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VERSION: "1.0.0"
     image: tasks-service:1.0.0
     restart: unless-stopped
     depends_on:

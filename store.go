@@ -53,9 +53,22 @@ CREATE INDEX IF NOT EXISTS tasks_status_idx ON tasks (status);
 const columns = `id, title, description, status, priority, to_char(due_date, 'YYYY-MM-DD'), created_at, updated_at`
 
 // Migrate создаёт таблицу при первом запуске.
+// Несколько реплик сервиса могут стартовать одновременно, поэтому схема создаётся
+// под блокировкой PostgreSQL: реплики выполняют этот шаг по очереди.
 func (s *Store) Migrate(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, schema)
-	return err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(815001)"); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, schema); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Ping проверяет соединение с базой (для /health).

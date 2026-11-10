@@ -1,0 +1,89 @@
+# Микросервис tasks-service: развертывание из двух реплик и сервис NodePort.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tasks-service
+  namespace: tasks
+  labels:
+    app: tasks-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tasks-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: tasks-service
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: app
+          # Образ собран локально и загружен в кластер командой `minikube image load`,
+          # поэтому из реестра его тянуть не нужно.
+          image: tasks-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: APP_PORT
+              value: "8000"
+            - name: DB_HOST
+              value: tasks-db
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef: { name: tasks-db, key: POSTGRES_DB }
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef: { name: tasks-db, key: POSTGRES_USER }
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: tasks-db, key: POSTGRES_PASSWORD }
+          # Готовность: под получает трафик, только когда отвечает /health (сервис видит базу).
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          # Живость: если /health перестал отвечать, kubelet перезапустит контейнер.
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 96Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tasks-service
+  namespace: tasks
+  labels:
+    app: tasks-service
+spec:
+  # NodePort: сервис доступен снаружи кластера на порту 30080 узла.
+  type: NodePort
+  selector:
+    app: tasks-service
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      nodePort: 30080

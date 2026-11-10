@@ -96,6 +96,26 @@ docker run --rm --network host -v "$PWD/postman:/etc/newman" postman/newman:alpi
   run tasks-service.postman_collection.json
 ```
 
+## Kubernetes
+
+Манифесты лежат в каталоге `k8s/`: пространство имён `tasks`, PostgreSQL (Secret, PVC, Deployment, Service),
+сам сервис (Deployment из двух реплик с пробами готовности и живости, Service типа NodePort на порту 30080)
+и учётная запись для CI с правами только на обновление развертывания.
+
+```bash
+minikube start --driver=docker
+docker build -t tasks-service:1.0.0 --build-arg VERSION=1.0.0 .
+minikube image load tasks-service:1.0.0
+kubectl apply -f k8s/
+curl http://$(minikube ip):30080/health
+```
+
+## CI/CD
+
+`Jenkinsfile` описывает конвейер: сборка образа (с тестами внутри Dockerfile) → загрузка образа в Minikube →
+обновление развертывания (`kubectl set image`, ожидание `rollout status`, при неудаче — `rollout undo`) →
+проверка `/health`, который возвращает версию выкаченной сборки.
+
 ## Устройство
 
 ```
@@ -107,6 +127,8 @@ middleware.go   журнал запросов, перехват паник, от
 main_test.go    тесты проверки данных и обработки ошибок
 openapi.yaml    описание API
 Dockerfile      двухэтапная сборка (golang → alpine)
+Jenkinsfile     конвейер сборки и выкладки в Kubernetes
+k8s/            манифесты Kubernetes
 docker-compose.yml  сервис + PostgreSQL
 ```
 

@@ -1,0 +1,87 @@
+# PostgreSQL для tasks-service: параметры подключения, том с данными, развертывание и сервис.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tasks-db
+  namespace: tasks
+type: Opaque
+stringData:
+  # Учебные значения. В реальном проекте секрет в репозиторий не кладут.
+  POSTGRES_DB: tasks
+  POSTGRES_USER: tasks
+  POSTGRES_PASSWORD: tasks
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tasks-db-data
+  namespace: tasks
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tasks-db
+  namespace: tasks
+  labels:
+    app: tasks-db
+spec:
+  replicas: 1
+  # Том ReadWriteOnce: старый под должен завершиться до запуска нового.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tasks-db
+  template:
+    metadata:
+      labels:
+        app: tasks-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: tasks-db
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: tasks-db-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tasks-db
+  namespace: tasks
+spec:
+  # ClusterIP: база доступна только внутри кластера по имени tasks-db.
+  type: ClusterIP
+  selector:
+    app: tasks-db
+  ports:
+    - port: 5432
+      targetPort: 5432

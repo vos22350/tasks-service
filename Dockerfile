@@ -15,8 +15,11 @@ COPY . .
 # Проверки и тесты выполняются при сборке: образ с неработающим кодом не соберётся.
 RUN go vet ./... && go test ./...
 
+# Версия сборки попадает в бинарный файл и видна в ответе /health.
+ARG VERSION=dev
+
 # Статический бинарный файл без отладочной информации.
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/tasks-service .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/tasks-service .
 
 # ---------- Этап 2: запуск ----------
 # Минимальный образ: только бинарный файл и непривилегированный пользователь.

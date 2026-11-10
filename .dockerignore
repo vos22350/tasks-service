@@ -3,3 +3,5 @@
 README.md
 postman
 docker-compose.yml
+k8s
+Jenkinsfile

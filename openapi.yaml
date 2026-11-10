@@ -191,6 +191,7 @@ components:
       properties:
         status: { type: string, example: ok }
         database: { type: string, example: up }
+        version: { type: string, example: 1.0.2-fe93bc3 }
     Error:
       type: object
       properties:

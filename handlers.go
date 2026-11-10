@@ -124,10 +124,10 @@ func (a *App) health(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	if err := a.store.Ping(ctx); err != nil {
 		a.log.Error("база данных недоступна", "error", err.Error())
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable", "database": "down"})
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable", "database": "down", "version": version})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "database": "up"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "database": "up", "version": version})
 }
 
 // queryInt читает целочисленный параметр запроса в заданных границах.
