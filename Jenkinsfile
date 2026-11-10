@@ -55,7 +55,7 @@ pipeline {
             steps {
                 sh '''
                     kubectl -n $NAMESPACE get pods -l app=tasks-service -o wide
-                    response=$(curl -fsS $APP_URL/health)
+                    response=$(curl -fsS --connect-timeout 3 --max-time 5 --retry 5 --retry-delay 2 --retry-all-errors $APP_URL/health)
                     echo "$response"
                     echo "$response" | grep -q "\\"version\\":\\"$TAG\\""
                 '''

@@ -60,6 +60,12 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 3
+          # Пауза перед остановкой: за это время кластер убирает под из маршрутизации,
+          # и новые запросы на завершающийся под уже не приходят.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
           resources:
             requests:
               cpu: 25m
