@@ -1,0 +1,228 @@
+openapi: 3.0.3
+info:
+  title: tasks-service
+  version: 1.0.0
+  description: >
+    Учебный микросервис «Список задач». REST API поверх PostgreSQL.
+    Все ошибки возвращаются в едином формате (схема Error).
+servers:
+  - url: /
+tags:
+  - name: tasks
+    description: Задачи
+  - name: service
+    description: Служебные запросы
+paths:
+  /health:
+    get:
+      tags: [service]
+      summary: Состояние сервиса и базы данных
+      responses:
+        '200':
+          description: Сервис работает, база доступна
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: База данных недоступна
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+  /api/v1/tasks:
+    get:
+      tags: [tasks]
+      summary: Список задач
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/Status' }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Страница списка
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TaskList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [tasks]
+      summary: Создать задачу
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskCreate' }
+            example:
+              title: Сдать ЛР по микросервисам
+              description: Go, PostgreSQL, Docker
+              priority: 1
+              due_date: '2026-12-01'
+      responses:
+        '201':
+          description: Задача создана
+          headers:
+            Location:
+              schema: { type: string }
+              description: Адрес созданной задачи
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/tasks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    get:
+      tags: [tasks]
+      summary: Получить задачу
+      responses:
+        '200':
+          description: Задача
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [tasks]
+      summary: Полностью заменить задачу
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskCreate' }
+      responses:
+        '200':
+          description: Задача после замены
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    patch:
+      tags: [tasks]
+      summary: Изменить отдельные поля задачи
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskPatch' }
+            example:
+              status: done
+      responses:
+        '200':
+          description: Задача после изменения
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [tasks]
+      summary: Удалить задачу
+      responses:
+        '204':
+          description: Задача удалена
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  schemas:
+    Status:
+      type: string
+      enum: [todo, in_progress, done]
+    Task:
+      type: object
+      properties:
+        id: { type: integer, format: int64, example: 1 }
+        title: { type: string, example: Сдать ЛР по микросервисам }
+        description: { type: string, example: 'Go, PostgreSQL, Docker' }
+        status: { $ref: '#/components/schemas/Status' }
+        priority: { type: integer, minimum: 1, maximum: 5, example: 1 }
+        due_date: { type: string, format: date, nullable: true, example: '2026-12-01' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TaskCreate:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200, description: Уникальное название }
+        description: { type: string, maxLength: 2000, default: '' }
+        status: { $ref: '#/components/schemas/Status' }
+        priority: { type: integer, minimum: 1, maximum: 5, default: 3 }
+        due_date: { type: string, format: date, nullable: true }
+    TaskPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        status: { $ref: '#/components/schemas/Status' }
+        priority: { type: integer, minimum: 1, maximum: 5 }
+        due_date: { type: string, description: 'Дата ГГГГ-ММ-ДД; пустая строка снимает срок' }
+    TaskList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Task' }
+        total: { type: integer, example: 1 }
+        limit: { type: integer, example: 20 }
+        offset: { type: integer, example: 0 }
+    Health:
+      type: object
+      properties:
+        status: { type: string, example: ok }
+        database: { type: string, example: up }
+    Error:
+      type: object
+      properties:
+        error: { type: string, example: validation_error }
+        message: { type: string, example: данные не прошли проверку }
+        details:
+          type: object
+          additionalProperties: { type: string }
+          example: { title: обязательное поле }
+  responses:
+    BadRequest:
+      description: Некорректный запрос (битый JSON, неверный id или параметр)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Задача не найдена
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Задача с таким названием уже существует
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UnsupportedMediaType:
+      description: Тело запроса не application/json
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Данные не прошли проверку
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

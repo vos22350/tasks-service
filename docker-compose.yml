@@ -1,0 +1,40 @@
+name: tasks-service
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tasks}
+      POSTGRES_USER: ${POSTGRES_USER:-tasks}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tasks}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Порт СУБД наружу не публикуется: к базе обращается только сервис по внутренней сети.
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tasks-service:1.0.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_PORT: "8000"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:-tasks}
+      DB_USER: ${POSTGRES_USER:-tasks}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-tasks}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+
+volumes:
+  db-data:

@@ -1,0 +1,951 @@
+{
+  "info": {
+    "name": "tasks-service",
+    "description": "Проверка микросервиса «Список задач»: рабочие запросы и обработка ошибок.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "taskId",
+      "value": ""
+    },
+    {
+      "key": "title",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Рабочие запросы",
+      "item": [
+        {
+          "name": "01. Состояние сервиса",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"база данных доступна\", function () { pm.expect(pm.response.json().database).to.eql(\"up\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "02. Создать задачу",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// уникальное название, чтобы коллекцию можно было запускать повторно",
+                  "pm.collectionVariables.set(\"title\", \"Сдать ЛР по микросервисам \" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 201\", function () { pm.response.to.have.status(201); });",
+                  "const task = pm.response.json();",
+                  "pm.collectionVariables.set(\"taskId\", task.id);",
+                  "pm.test(\"задача создана со значениями по умолчанию\", function () {",
+                  "    pm.expect(task.id).to.be.a(\"number\");",
+                  "    pm.expect(task.status).to.eql(\"todo\");",
+                  "    pm.expect(task.priority).to.eql(1);",
+                  "    pm.expect(task.due_date).to.eql(\"2026-12-01\");",
+                  "});",
+                  "pm.test(\"заголовок Location указывает на задачу\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Location\")).to.eql(\"/api/v1/tasks/\" + task.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{title}}\",\n  \"description\": \"Go, PostgreSQL, Docker\",\n  \"priority\": 1,\n  \"due_date\": \"2026-12-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "03. Список задач",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"в списке есть задачи\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.items).to.be.an(\"array\").and.not.empty;",
+                  "    pm.expect(body.total).to.be.at.least(1);",
+                  "    pm.expect(body.limit).to.eql(5);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks?limit=5&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "04. Получить задачу",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"вернулась созданная задача\", function () {",
+                  "    pm.expect(pm.response.json().title).to.eql(pm.collectionVariables.get(\"title\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "05. Изменить статус (PATCH)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"изменился только статус\", function () {",
+                  "    const task = pm.response.json();",
+                  "    pm.expect(task.status).to.eql(\"in_progress\");",
+                  "    pm.expect(task.priority).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_progress\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "06. Заменить задачу (PUT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"задача заменена целиком, срок сброшен\", function () {",
+                  "    const task = pm.response.json();",
+                  "    pm.expect(task.status).to.eql(\"done\");",
+                  "    pm.expect(task.description).to.eql(\"Отчёт готов\");",
+                  "    pm.expect(task.due_date).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{title}}\",\n  \"description\": \"Отчёт готов\",\n  \"status\": \"done\",\n  \"priority\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "07. Фильтр по статусу",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"все задачи в статусе done\", function () {",
+                  "    pm.response.json().items.forEach(function (t) { pm.expect(t.status).to.eql(\"done\"); });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks?status=done",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "done"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Обработка ошибок",
+      "item": [
+        {
+          "name": "08. Создать дубликат → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 409\", function () { pm.response.to.have.status(409); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{title}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "09. Пустое название и неверные поля → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "pm.test(\"перечислены все поля с ошибками\", function () {",
+                  "    pm.expect(pm.response.json().details).to.have.all.keys(\"title\", \"status\", \"priority\", \"due_date\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"  \",\n  \"status\": \"closed\",\n  \"priority\": 9,\n  \"due_date\": \"31.12.2026\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "10. Битый JSON → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\": \"нет закрывающей скобки\"",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "11. Неверный тип поля → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\": \"a\", \"priority\": \"высокий\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "12. Неизвестное поле → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\": \"a\", \"owner\": \"me\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "13. Не JSON → 415",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 415\", function () { pm.response.to.have.status(415); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "title=abc"
+            }
+          }
+        },
+        {
+          "name": "14. Нечисловой id → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "abc"
+              ]
+            }
+          }
+        },
+        {
+          "name": "15. Несуществующая задача → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "999999999"
+              ]
+            }
+          }
+        },
+        {
+          "name": "16. Неверный параметр limit → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks?limit=1000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "1000"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "17. PATCH без полей → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "18. Метод не поддерживается → 405",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 405\", function () { pm.response.to.have.status(405); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "pm.test(\"есть заголовок Allow\", function () { pm.expect(pm.response.headers.get(\"Allow\")).to.include(\"GET\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "19. Неизвестный маршрут → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "tasks"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Завершение",
+      "item": [
+        {
+          "name": "20. Удалить задачу",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 204\", function () { pm.response.to.have.status(204); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "21. Задача удалена → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"ошибка в формате JSON с сообщением\", function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.a(\"string\");",
+                  "    pm.expect(body.message).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "22. Сервис жив после всех ошибок",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"код ответа 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
