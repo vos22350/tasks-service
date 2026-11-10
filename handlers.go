@@ -127,7 +127,7 @@ func (a *App) health(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable", "database": "down", "version": version})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "database": "up", "version": version})
+	writeJSON(w, http.StatusOK, map[string]string{"service": "tasks-service", "status": "ok", "database": "up", "version": version})
 }
 
 // queryInt читает целочисленный параметр запроса в заданных границах.
